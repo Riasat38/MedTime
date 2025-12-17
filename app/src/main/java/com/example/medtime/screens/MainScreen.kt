@@ -14,10 +14,12 @@ fun AppNavigation() {
     NavHost(navController = navController, startDestination = "login") {
         composable("login") {
             LogInScreen(
-                onLoginClick = { email, _ ->
-                    // TODO: Implement login logic here
-                    // For now, navigate to home screen
-                    navController.navigate("home/$email")
+                onLoginSuccess = { email, name ->
+                    // Navigate to home screen on successful login
+                    navController.navigate("home/$email/$name") {
+                        // Clear back stack so user can't go back to login
+                        popUpTo("login") { inclusive = true }
+                    }
                 },
                 onSignUpClick = { navController.navigate("signup") }
             )
@@ -25,16 +27,23 @@ fun AppNavigation() {
         composable("signup") {
             SignUpScreen(
                 onBackClick = { navController.popBackStack() },
-                onSignUpClick = { name, _, _, _, _ ->
-
-                    // For now, navigate back to login after successful signup
-                    navController.navigate("home/$name")
+                onSignUpSuccess = { email, name ->
+                    // Navigate to home screen on successful signup
+                    navController.navigate("home/$email/$name") {
+                        // Clear back stack so user can't go back to signup
+                        popUpTo("login") { inclusive = true }
+                    }
                 }
             )
         }
-        composable("home/{email}") { backStackEntry ->
+        composable("home/{email}/{name}") { backStackEntry ->
             val email = backStackEntry.arguments?.getString("email") ?: ""
-            HomeScreen(email = email, modifier = Modifier.fillMaxSize())
+            val name = backStackEntry.arguments?.getString("name") ?: ""
+            HomeScreen(
+                email = email,
+                name = name,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }

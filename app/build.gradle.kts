@@ -54,7 +54,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
 
     // Firebase BOM (Bill of Materials) - manages Firebase versions
-    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
 
     // Firebase Authentication
     implementation("com.google.firebase:firebase-auth-ktx")

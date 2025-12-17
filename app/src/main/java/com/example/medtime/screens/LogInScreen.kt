@@ -13,8 +13,11 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.medtime.components.MedTimeTopAppBar
+import com.example.medtime.data.AuthResult
 import com.example.medtime.ui.theme.MedTimeTheme
+import com.example.medtime.viewmodel.LoginViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -23,12 +26,33 @@ import androidx.navigation.compose.rememberNavController
 @Composable
 fun LogInScreen(
     modifier: Modifier = Modifier,
-    onLoginClick: (email: String, password: String) -> Unit = { _, _ -> },
+    viewModel: LoginViewModel = viewModel(),
+    onLoginSuccess: (email: String, name: String) -> Unit = { _, _ -> },
     onSignUpClick: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+
+    // Observe login state
+    val loginState = viewModel.loginState
+    val errorMessage = viewModel.errorMessage
+
+    // Handle successful login
+    LaunchedEffect(loginState) {
+        if (loginState is AuthResult.Success) {
+            onLoginSuccess(loginState.data.email, loginState.data.name)
+            viewModel.resetState()
+        }
+    }
+
+    // Show error message
+    if (errorMessage != null) {
+        LaunchedEffect(errorMessage) {
+            kotlinx.coroutines.delay(3000)
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
         modifier = modifier
@@ -95,18 +119,44 @@ fun LogInScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Error message
+                if (errorMessage != null) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = errorMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+
                 // Login Button
                 Button(
-                    onClick = { onLoginClick(email, password) },
+                    onClick = { viewModel.login(email, password) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
-                    enabled = email.isNotBlank() && password.isNotBlank()
+                    enabled = email.isNotBlank() && password.isNotBlank() && loginState !is AuthResult.Loading
                 ) {
-                    Text(
-                        text = "Login",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    if (loginState is AuthResult.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = "Login",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
 
                 // Sign Up Text
@@ -130,19 +180,6 @@ fun LogInScreen(
     }
 }
 
-@Composable
-fun MainScreen() {
-    val navController = rememberNavController()
-
-    NavHost(navController = navController, startDestination = "login") {
-        composable("login") {
-            LogInScreen(
-                onLoginClick = { _, _ -> },
-                onSignUpClick = { navController.navigate("signup") }
-            )
-        }
-    }
-}
 
 @Preview(showBackground = true, showSystemUi = true)
 @Composable

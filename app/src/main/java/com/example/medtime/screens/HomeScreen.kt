@@ -15,6 +15,7 @@ import com.example.medtime.ui.theme.MedTimeTheme
 @Composable
 fun HomeScreen(
     email: String,
+    name: String = "",
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -32,12 +33,13 @@ fun HomeScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "Welcome!",
+                text = "Welcome, ${name.ifBlank { "User" }}!",
                 style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = "Logged in as:",

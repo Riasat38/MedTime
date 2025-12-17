@@ -15,15 +15,19 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.medtime.components.MedTimeTopAppBar
+import com.example.medtime.data.AuthResult
 import com.example.medtime.ui.theme.MedTimeTheme
+import com.example.medtime.viewmodel.SignUpViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignUpScreen(
     modifier: Modifier = Modifier,
+    viewModel: SignUpViewModel = viewModel(),
     onBackClick: () -> Unit = {},
-    onSignUpClick: (name: String, email: String, password: String, gender: String, age: String) -> Unit = { _, _, _, _, _ -> }
+    onSignUpSuccess: (email: String, name: String) -> Unit = { _, _ -> }
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -34,6 +38,26 @@ fun SignUpScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var confirmPasswordVisible by remember { mutableStateOf(false) }
     var expandedGender by remember { mutableStateOf(false) }
+
+    // Observe signup state
+    val signUpState = viewModel.signUpState
+    val errorMessage = viewModel.errorMessage
+
+    // Handle successful signup
+    LaunchedEffect(signUpState) {
+        if (signUpState is AuthResult.Success) {
+            onSignUpSuccess(signUpState.data.email, signUpState.data.name)
+            viewModel.resetState()
+        }
+    }
+
+    // Show error message
+    if (errorMessage != null) {
+        LaunchedEffect(errorMessage) {
+            kotlinx.coroutines.delay(3000)
+            viewModel.clearError()
+        }
+    }
 
     val genderOptions = listOf("Male", "Female", "Other", "Prefer not to say")
     val scrollState = rememberScrollState()
@@ -208,10 +232,29 @@ fun SignUpScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                // Error message
+                if (errorMessage != null) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = errorMessage,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+
                 // Sign Up Button
                 Button(
                     onClick = {
-                        onSignUpClick(name, email, password, selectedGender, age)
+                        viewModel.signUp(name, email, password, selectedGender, age)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -222,12 +265,20 @@ fun SignUpScreen(
                              confirmPassword.isNotBlank() &&
                              password == confirmPassword &&
                              selectedGender.isNotBlank() &&
-                             age.isNotBlank()
+                             age.isNotBlank() &&
+                             signUpState !is AuthResult.Loading
                 ) {
-                    Text(
-                        text = "Sign Up",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    if (signUpState is AuthResult.Loading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(
+                            text = "Sign Up",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
