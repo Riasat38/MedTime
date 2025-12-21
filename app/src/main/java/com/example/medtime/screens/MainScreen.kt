@@ -23,7 +23,10 @@ import com.example.medtime.viewmodel.PrescriptionViewModel
 fun AppNavigation() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "login") {
+    // Determine start destination based on login state
+    val startDestination = if (UserSession.isLoggedIn()) "home" else "login"
+
+    NavHost(navController = navController, startDestination = startDestination) {
         composable("login") {
             LogInScreen(
                 onLoginSuccess = { user ->

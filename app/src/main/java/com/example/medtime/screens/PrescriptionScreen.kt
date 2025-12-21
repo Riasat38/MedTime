@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.medtime.components.GradientButton
 import com.example.medtime.components.MedTimeTopAppBar
+import com.example.medtime.data.UserSession
 import com.example.medtime.viewmodel.AnalysisState
 import com.example.medtime.viewmodel.PrescriptionViewModel
 import java.io.File
@@ -107,7 +108,15 @@ fun PrescriptionScreen(
 
     Scaffold(
         topBar = {
-            MedTimeTopAppBar()
+            MedTimeTopAppBar(
+                showLogout = true,
+                onLogoutClick = {
+                    UserSession.clearUser()
+                    navController?.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         },
         bottomBar = {
             navController?.let {
@@ -164,7 +173,7 @@ fun PrescriptionScreen(
                     },
                     modifier = Modifier.weight(1f),
                     enabled = viewModel.analysisState !is AnalysisState.Loading,
-                    isOutlined = true,
+                    isOutlined = false,
                     icon = Icons.Default.Photo,
                     height = 50.dp
                 )

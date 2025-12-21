@@ -8,8 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.medtime.components.MedTimeTopAppBar
-import com.example.medtime.ui.theme.MedTimeTheme
 import com.example.medtime.data.UserSession
+import com.example.medtime.ui.theme.MedTimeTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,7 +24,15 @@ fun HomeScreen(
     val age = user?.age ?: ""
     Scaffold(
         topBar = {
-            MedTimeTopAppBar()
+           MedTimeTopAppBar(
+                showLogout = true,
+                onLogoutClick = {
+                    UserSession.clearUser()
+                    navController?.navigate("login") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         },
         bottomBar = {
             navController?.let {
@@ -59,6 +67,9 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(text = "Age: $age")
+
+            Spacer(modifier = Modifier.height(32.dp))
+
         }
     }
 }

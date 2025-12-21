@@ -23,9 +23,7 @@ class PrescriptionViewModel : ViewModel() {
     var selectedImage by mutableStateOf<Bitmap?>(null)
         private set
 
-    /**
-     * Analyze prescription image with Gemini AI
-     */
+
     fun analyzePrescription(image: Bitmap) {
         selectedImage = image
         analysisState = AnalysisState.Loading
@@ -42,17 +40,12 @@ class PrescriptionViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Reset the analysis state
-     */
     fun resetAnalysis() {
         analysisState = AnalysisState.Idle
         selectedImage = null
     }
 
-    /**
-     * Clear any error state
-     */
+
     fun clearError() {
         if (analysisState is AnalysisState.Error) {
             analysisState = AnalysisState.Idle
@@ -60,9 +53,6 @@ class PrescriptionViewModel : ViewModel() {
     }
 }
 
-/**
- * Sealed class representing different analysis states
- */
 sealed class AnalysisState {
     object Idle : AnalysisState()
     object Loading : AnalysisState()

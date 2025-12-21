@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/app/src/main/java/com/example/medtime/MainActivity.kt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/java/com/example/medtime/MainActivity.kt" />
+              <option name="originalContent" value="package com.example.medtime&#10;&#10;import android.os.Bundle&#10;import androidx.activity.ComponentActivity&#10;import androidx.activity.compose.setContent&#10;import androidx.activity.enableEdgeToEdge&#10;import androidx.compose.runtime.Composable&#10;import com.example.medtime.data.UserSession&#10;import com.example.medtime.screens.AppNavigation&#10;import com.example.medtime.ui.theme.MedTimeTheme&#10;&#10;class MainActivity : ComponentActivity() {&#10;    override fun onCreate(savedInstanceState: Bundle?) {&#10;        super.onCreate(savedInstanceState)&#10;        &#10;        // Initialize session management&#10;        UserSession.initialize(this)&#10;        &#10;        enableEdgeToEdge()&#10;        setContent {&#10;            MedTimeTheme {&#10;                MedTimeApp()&#10;            }&#10;        }&#10;    }&#10;}&#10;&#10;@Composable&#10;fun MedTimeApp() {&#10;    AppNavigation()&#10;}&#10;" />
+              <option name="updatedContent" value="package com.example.medtime&#10;&#10;import android.os.Bundle&#10;import androidx.activity.ComponentActivity&#10;import androidx.activity.compose.setContent&#10;import androidx.activity.enableEdgeToEdge&#10;import androidx.compose.runtime.Composable&#10;import com.example.medtime.data.UserSession&#10;import com.example.medtime.screens.AppNavigation&#10;import com.example.medtime.ui.theme.MedTimeTheme&#10;&#10;class MainActivity : ComponentActivity() {&#10;    override fun onCreate(savedInstanceState: Bundle?) {&#10;        super.onCreate(savedInstanceState)&#10;        &#10;        // Initialize session management&#10;        UserSession.initialize(this)&#10;        &#10;        enableEdgeToEdge()&#10;        setContent {&#10;            MedTimeTheme {&#10;                MedTimeApp()&#10;            }&#10;        }&#10;    }&#10;}&#10;&#10;@Composable&#10;fun MedTimeApp() {&#10;    AppNavigation()&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
