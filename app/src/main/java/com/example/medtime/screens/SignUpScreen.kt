@@ -20,6 +20,11 @@ import com.example.medtime.components.MedTimeTopAppBar
 import com.example.medtime.data.AuthResult
 import com.example.medtime.ui.theme.MedTimeTheme
 import com.example.medtime.viewmodel.SignUpViewModel
+import com.example.medtime.data.User
+import androidx.compose.foundation.background
+import com.example.medtime.ui.theme.gradientBrush
+import com.example.medtime.components.GradientButton
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,7 +32,7 @@ fun SignUpScreen(
     modifier: Modifier = Modifier,
     viewModel: SignUpViewModel = viewModel(),
     onBackClick: () -> Unit = {},
-    onSignUpSuccess: (email: String, name: String) -> Unit = { _, _ -> }
+    onSignUpSuccess: (user: User) -> Unit = { _ -> }
 ) {
     var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -46,7 +51,7 @@ fun SignUpScreen(
     // Handle successful signup
     LaunchedEffect(signUpState) {
         if (signUpState is AuthResult.Success) {
-            onSignUpSuccess(signUpState.data.email, signUpState.data.name)
+            onSignUpSuccess(signUpState.data)
             viewModel.resetState()
         }
     }
@@ -58,7 +63,6 @@ fun SignUpScreen(
             viewModel.clearError()
         }
     }
-
     val genderOptions = listOf("Male", "Female", "Other", "Prefer not to say")
     val scrollState = rememberScrollState()
 
@@ -70,7 +74,12 @@ fun SignUpScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            MedTimeTopAppBar(colors = TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color(0xFFE6E6FA)))
+            MedTimeTopAppBar(modifier = Modifier.background(brush = gradientBrush),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent, // Makes the gradient visible
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White))
 
             Column(
                 modifier = Modifier
@@ -252,13 +261,12 @@ fun SignUpScreen(
                 }
 
                 // Sign Up Button
-                Button(
+                GradientButton(
+                    text = "Sign Up",
                     onClick = {
                         viewModel.signUp(name, email, password, selectedGender, age)
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
+                    modifier = Modifier.fillMaxWidth(),
                     enabled = name.isNotBlank() &&
                              email.isNotBlank() &&
                              password.isNotBlank() &&
@@ -266,20 +274,11 @@ fun SignUpScreen(
                              password == confirmPassword &&
                              selectedGender.isNotBlank() &&
                              age.isNotBlank() &&
-                             signUpState !is AuthResult.Loading
-                ) {
-                    if (signUpState is AuthResult.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Text(
-                            text = "Sign Up",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
+                             signUpState !is AuthResult.Loading,
+                    isOutlined = false,
+                    isLoading = signUpState is AuthResult.Loading,
+                    height = 56.dp
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 

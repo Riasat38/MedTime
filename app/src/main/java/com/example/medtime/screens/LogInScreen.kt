@@ -18,21 +18,22 @@ import com.example.medtime.components.MedTimeTopAppBar
 import com.example.medtime.data.AuthResult
 import com.example.medtime.ui.theme.MedTimeTheme
 import com.example.medtime.viewmodel.LoginViewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
-
+import com.example.medtime.data.User
+import com.example.medtime.ui.theme.gradientBrush
+import androidx.compose.foundation.background
+import com.example.medtime.components.GradientButton
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogInScreen(
     modifier: Modifier = Modifier,
     viewModel: LoginViewModel = viewModel(),
-    onLoginSuccess: (email: String, name: String) -> Unit = { _, _ -> },
+    onLoginSuccess: (user: User) -> Unit = { _ -> },
     onSignUpClick: () -> Unit = {}
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
+
 
     // Observe login state
     val loginState = viewModel.loginState
@@ -41,7 +42,7 @@ fun LogInScreen(
     // Handle successful login
     LaunchedEffect(loginState) {
         if (loginState is AuthResult.Success) {
-            onLoginSuccess(loginState.data.email, loginState.data.name)
+            onLoginSuccess(loginState.data)
             viewModel.resetState()
         }
     }
@@ -62,7 +63,12 @@ fun LogInScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            MedTimeTopAppBar(colors = TopAppBarDefaults.mediumTopAppBarColors(containerColor = Color(0xFFE6E6FA)))
+            MedTimeTopAppBar(modifier = Modifier.background(brush = gradientBrush),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent, // Makes the gradient visible
+                    titleContentColor = Color.White,
+                    navigationIconContentColor = Color.White,
+                    actionIconContentColor = Color.White))
 
             Column(
                 modifier = Modifier
@@ -139,25 +145,15 @@ fun LogInScreen(
                 }
 
                 // Login Button
-                Button(
+                GradientButton(
+                    text = "Login",
                     onClick = { viewModel.login(email, password) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    enabled = email.isNotBlank() && password.isNotBlank() && loginState !is AuthResult.Loading
-                ) {
-                    if (loginState is AuthResult.Loading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Text(
-                            text = "Login",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = email.isNotBlank() && password.isNotBlank() && loginState !is AuthResult.Loading,
+                    isOutlined = false,
+                    isLoading = loginState is AuthResult.Loading,
+                    height = 56.dp
+                )
 
                 // Sign Up Text
                 Row(

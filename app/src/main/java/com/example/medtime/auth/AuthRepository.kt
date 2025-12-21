@@ -57,11 +57,11 @@ class AuthRepository {
         age: String
     ): AuthResult<User> {
         return try {
-            // Create user in Firebase Authentication
+
             val result = auth.createUserWithEmailAndPassword(email, password).await()
             val uid = result.user?.uid ?: return AuthResult.Error("Failed to create user")
 
-            // Create user document in Firestore
+
             val user = User(
                 uid = uid,
                 name = name,

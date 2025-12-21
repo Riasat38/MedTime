@@ -5,22 +5,33 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.medtime.components.MedTimeTopAppBar
 import com.example.medtime.ui.theme.MedTimeTheme
+import com.example.medtime.data.UserSession
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    email: String,
-    name: String = "",
+    navController: androidx.navigation.NavController? = null,
     modifier: Modifier = Modifier
 ) {
+    val user = UserSession.getUser()
+    val email = user?.email ?: ""
+    val name = user?.name ?: ""
+    val gender = user?.gender ?: ""
+    val age = user?.age ?: ""
     Scaffold(
         topBar = {
             MedTimeTopAppBar()
+        },
+        bottomBar = {
+            navController?.let {
+                com.example.medtime.components.Navbar(
+                    navController = it
+                )
+            }
         },
         modifier = modifier
     ) { paddingValues ->
@@ -28,54 +39,34 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = Alignment.Start
         ) {
             Text(
-                text = "Welcome, ${name.ifBlank { "User" }}!",
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center
+                text = "User Information",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Text(
-                text = "Logged in as:",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
+            Text(text = "Name: $name")
             Spacer(modifier = Modifier.height(8.dp))
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Text(
-                    text = email,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                )
-            }
+            Text(text = "Email: $email")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Gender: $gender")
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Age: $age")
         }
     }
 }
-
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 private fun HomeScreenPreview() {
     MedTimeTheme {
-        HomeScreen(email = "user@example.com")
+        HomeScreen()
     }
 }
 

@@ -42,9 +42,7 @@ fun MedTimeTopAppBar(
     )
 }
 
-/**
- * Preview for the MedTimeTopAppBar with just a title
- */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
@@ -54,9 +52,7 @@ private fun TopAppBarPreview() {
     }
 }
 
-/**
- * Preview for the MedTimeTopAppBar with navigation icon
- */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
