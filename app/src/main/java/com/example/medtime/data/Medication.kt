@@ -9,7 +9,7 @@ data class Medication(
     val dosage: String,
     val frequency: String,
     val durationDays: Int,
-    val times: List<String>, // e.g., ["08:00", "14:00", "20:00"]
+    val times: List<String>,
     val startDate: Timestamp = Timestamp.now(),
     val endDate: Timestamp,
     val notes: String = "",
@@ -24,5 +24,5 @@ data class Prescription(
     val extractedText: String? = null,
     val medications: List<Medication> = emptyList(),
     val uploadDate: Timestamp = Timestamp.now(),
-    val status: String = "pending" // pending, processed, error
+    val status: String = "pending"
 )

@@ -25,6 +25,7 @@ import com.example.medtime.ui.theme.DarkBlue
 fun MedicationCard(
     medication: ParsedMedication,
     index: Int,
+    timeEdit: Boolean = true,
     onMedicationUpdated: (ParsedMedication) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -189,6 +190,7 @@ fun MedicationCard(
             EditableTimesField(
                 label = "Reminder Times",
                 times = editedMedication.times,
+                edit = timeEdit,
                 onTimeClick = { timeIndex ->
                     editingTimeIndex = timeIndex
                     showTimePicker = true
@@ -242,9 +244,11 @@ private fun ReadOnlyField(
 private fun EditableTimesField(
     label: String,
     times: List<String>,
+    edit: Boolean = true,
     onTimeClick: (Int) -> Unit,
     onAddTime: () -> Unit,
     onRemoveTime: (Int) -> Unit
+
 ) {
 
     Column {
@@ -260,8 +264,7 @@ private fun EditableTimesField(
                 color = DarkBlue
             )
 
-            // Add time button
-            IconButton(
+            if (edit){IconButton(
                 onClick = onAddTime,
                 modifier = Modifier.size(32.dp)
             ) {
@@ -270,6 +273,7 @@ private fun EditableTimesField(
                     contentDescription = "Add time",
                     tint = Blue600
                 )
+                }
             }
         }
 

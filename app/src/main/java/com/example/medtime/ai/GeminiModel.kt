@@ -7,7 +7,7 @@ import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.example.medtime.BuildConfig
-
+import kotlin.math.min
 private const val TAG = "GeminiApiService"
 
 data class GeminiResult(
@@ -15,15 +15,9 @@ data class GeminiResult(
     val modelUsed: String
 )
 
-class GeminiApiService() {
-    val apiKey = BuildConfig.GEMINI_API_KEY
-
-    val models = listOf(
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite"
-    )
+class GeminiApiService {
+    private val apiKey = BuildConfig.GEMINI_API_KEY
+    private val modelName = "gemini-2.5-flash"
 
     suspend fun extractMedicationInfo(
         imageBitmap: Bitmap,
@@ -31,69 +25,65 @@ class GeminiApiService() {
     ): GeminiResult = withContext(Dispatchers.IO) {
         Log.d(TAG, "Starting extraction. Bitmap: ${imageBitmap.width}x${imageBitmap.height}, config: ${imageBitmap.config}")
 
-        // Ensure bitmap is in correct format
-        val safeBitmap = if (imageBitmap.config == Bitmap.Config.HARDWARE) {
-            Log.d(TAG, "Converting hardware bitmap to software bitmap")
-            imageBitmap.copy(Bitmap.Config.ARGB_8888, false)
-        } else {
-            imageBitmap
-        }
+        // Ensure bitmap is in correct format and size
+        val safeBitmap = prepareSafeBitmap(imageBitmap)
 
         val prompt = buildPrompt(context)
-        var lastException: Exception? = null
 
-        // Try each model sequentially until one succeeds
-        for (modelName in models) {
-            try {
-                Log.d(TAG, "Trying model: $modelName")
+        try {
+            Log.d(TAG, "Using model: $modelName")
 
-                val generativeModel = GenerativeModel(
-                    modelName = modelName,
-                    apiKey = apiKey
-                )
+            val generativeModel = GenerativeModel(
+                modelName = modelName,
+                apiKey = apiKey
+            )
 
-                val content = content {
-                    text(prompt)
-                    image(safeBitmap)
-                }
-
-                val response = generativeModel.generateContent(content)
-                Log.d(TAG, "Successfully received response from model: $modelName")
-
-                val text = response.text ?: throw Exception("No response from AI")
-                return@withContext GeminiResult(response = text, modelUsed = modelName)
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Model $modelName failed: ${e.message}", e)
-                lastException = e
-
-                // Check if it's a rate limit, quota, or model availability error
-                val errorMessage = e.message?.lowercase() ?: ""
-                val isModelError = errorMessage.contains("rate limit") ||
-                        errorMessage.contains("quota") ||
-                        errorMessage.contains("resource exhausted") ||
-                        errorMessage.contains("429") ||
-                        errorMessage.contains("503") ||
-                        errorMessage.contains("unavailable") ||
-                        errorMessage.contains("overloaded") ||
-                        errorMessage.contains("capacity") ||
-                        errorMessage.contains("too many requests") ||
-                        errorMessage.contains("limit exceeded") ||
-                        errorMessage.contains("model not found") ||
-                        errorMessage.contains("not supported")
-
-                if (isModelError) {
-                    Log.w(TAG, "Model $modelName has limit/availability issues, trying next model...")
-                    continue // Try next model
-                } else {
-                    // For other errors (like invalid image, network issues), don't switch models
-                    throw Exception("Failed to extract information: ${e.message}")
-                }
+            val content = content {
+                text(prompt)
+                image(safeBitmap)
             }
+
+            val response = generativeModel.generateContent(content)
+            Log.d(TAG, "Successfully received response")
+
+            val text = response.text
+            if (text.isNullOrBlank()) {
+                throw Exception("Empty response from AI")
+            }
+
+            GeminiResult(response = text, modelUsed = modelName)
+
+        } catch (e: Exception) {
+            Log.e(TAG, "API call failed: ${e.message}", e)
+            throw Exception("Failed to analyze prescription: ${e.message}")
+        }
+    }
+
+    private fun prepareSafeBitmap(bitmap: Bitmap): Bitmap {
+        // Convert hardware bitmap to software bitmap if needed
+        var safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+            Log.d(TAG, "Converting hardware bitmap to software bitmap")
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+                ?: throw Exception("Failed to convert hardware bitmap")
+        } else {
+            bitmap
         }
 
-        // All models failed
-        throw Exception("All models exhausted. Last error: ${lastException?.message}")
+        // Resize if too large (max 800px to be safe for memory)
+        val maxSize = 1024
+        val width = safeBitmap.width
+        val height = safeBitmap.height
+
+        if (width > maxSize || height > maxSize) {
+            val scale = min(maxSize.toFloat() / width, maxSize.toFloat() / height)
+            val newWidth = (width * scale).toInt().coerceAtLeast(1)
+            val newHeight = (height * scale).toInt().coerceAtLeast(1)
+            Log.d(TAG, "Resizing bitmap from ${width}x${height} to ${newWidth}x${newHeight}")
+            val scaledBitmap = Bitmap.createScaledBitmap(safeBitmap, newWidth, newHeight, true)
+            safeBitmap = scaledBitmap
+        }
+
+        return safeBitmap
     }
 
     private fun buildPrompt(context: String): String {

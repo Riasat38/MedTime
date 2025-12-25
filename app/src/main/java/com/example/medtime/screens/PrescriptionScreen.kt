@@ -33,7 +33,6 @@ import com.example.medtime.viewmodel.AnalysisState
 import com.example.medtime.viewmodel.PrescriptionViewModel
 import com.example.medtime.viewmodel.SaveState
 import java.io.File
-import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,33 +45,37 @@ fun PrescriptionScreen(
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Helper function to resize and prepare bitmap for API
+    // Snackbar host state
+    val snackbarHostState = remember { SnackbarHostState() }
+
+
+    LaunchedEffect(viewModel.saveState) {
+        if (viewModel.saveState is SaveState.Success) {
+            snackbarHostState.showSnackbar(
+                message = "Prescription saved successfully!",
+                duration = SnackbarDuration.Short
+            )
+            // Reset the screen after showing snackbar
+            capturedBitmap = null
+            viewModel.resetAnalysis()
+        }
+    }
+
+    // Helper function to prepare bitmap for API (convert to software bitmap)
     fun prepareBitmapForAnalysis(bitmap: Bitmap): Bitmap {
-        try {
+        return try {
             // Convert hardware bitmap to software bitmap if needed
-            val softwareBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
-                bitmap.copy(Bitmap.Config.ARGB_8888, false)
+            if (bitmap.config == Bitmap.Config.HARDWARE) {
+                bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: bitmap
             } else {
                 bitmap
             }
-
-            // Resize if too large (max 1024px on longest side to prevent memory issues)
-            val maxSize = 1024
-            val width = softwareBitmap.width
-            val height = softwareBitmap.height
-
-            if (width <= maxSize && height <= maxSize) {
-                return softwareBitmap
-            }
-
-            val scale = min(maxSize.toFloat() / width, maxSize.toFloat() / height)
-            val newWidth = (width * scale).toInt()
-            val newHeight = (height * scale).toInt()
-
-            return Bitmap.createScaledBitmap(softwareBitmap, newWidth, newHeight, true)
         } catch (e: Exception) {
             Log.e("PrescriptionScreen", "Error preparing bitmap: ${e.message}", e)
-            throw e
+            bitmap // Return original if conversion fails
+        } catch (e: OutOfMemoryError) {
+            Log.e("PrescriptionScreen", "Out of memory preparing bitmap", e)
+            bitmap // Return original if OOM
         }
     }
 
@@ -87,6 +90,8 @@ fun PrescriptionScreen(
                     ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
                         decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                         decoder.isMutableRequired = false
+                        // Set sample size to reduce memory usage
+                        decoder.setTargetSampleSize(2)
                     }
                 } else {
                     @Suppress("DEPRECATION")
@@ -95,6 +100,8 @@ fun PrescriptionScreen(
                 val preparedBitmap = prepareBitmapForAnalysis(bitmap)
                 capturedBitmap = preparedBitmap
                 viewModel.analyzePrescription(preparedBitmap)
+            } catch (e: OutOfMemoryError) {
+                Log.e("PrescriptionScreen", "Out of memory processing camera image", e)
             } catch (e: Exception) {
                 Log.e("PrescriptionScreen", "Error processing camera image: ${e.message}", e)
             }
@@ -112,6 +119,8 @@ fun PrescriptionScreen(
                     ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
                         decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
                         decoder.isMutableRequired = false
+                        // Set sample size to reduce memory usage
+                        decoder.setTargetSampleSize(2)
                     }
                 } else {
                     @Suppress("DEPRECATION")
@@ -120,6 +129,8 @@ fun PrescriptionScreen(
                 val preparedBitmap = prepareBitmapForAnalysis(bitmap)
                 capturedBitmap = preparedBitmap
                 viewModel.analyzePrescription(preparedBitmap)
+            } catch (e: OutOfMemoryError) {
+                Log.e("PrescriptionScreen", "Out of memory processing gallery image", e)
             } catch (e: Exception) {
                 Log.e("PrescriptionScreen", "Error processing gallery image: ${e.message}", e)
             }
@@ -151,6 +162,15 @@ fun PrescriptionScreen(
     }
 
     Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        },
         topBar = {
             MedTimeTopAppBar(
                 showLogout = true,
@@ -266,7 +286,7 @@ fun PrescriptionScreen(
                     )
                 }
                 is AnalysisState.Success -> {
-                    // Header
+                    //On success
                     Text(
                         text = "Analysis Complete ✓",
                         style = MaterialTheme.typography.headlineSmall,
@@ -274,7 +294,6 @@ fun PrescriptionScreen(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-
                     Text(
                         text = "Review and edit the extracted medications below:",
                         style = MaterialTheme.typography.bodyMedium,
@@ -282,11 +301,12 @@ fun PrescriptionScreen(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    // Display each medication as an editable card
+                    // Display each medication -> editable field
                     state.medications.forEachIndexed { index, medication ->
                         MedicationCard(
                             medication = medication,
                             index = index,
+                            timeEdit = true,
                             onMedicationUpdated = { updatedMedication ->
                                 viewModel.updateMedication(index, updatedMedication)
                             }
@@ -311,7 +331,7 @@ fun PrescriptionScreen(
                             // Save button
                             GradientButton(
                                 text = "Save",
-                                onClick = { viewModel.savePrescription() },
+                                onClick = { viewModel.savePrescription(context) },
                                 modifier = Modifier.fillMaxWidth(),
                                 isOutlined = false,
                                 icon = Icons.Default.Save,
@@ -368,7 +388,7 @@ fun PrescriptionScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     GradientButton(
                                         text = "Retry Save",
-                                        onClick = { viewModel.savePrescription() },
+                                        onClick = { viewModel.savePrescription(context) },
                                         modifier = Modifier.fillMaxWidth(),
                                         isOutlined = false,
                                         icon = Icons.Default.Save,

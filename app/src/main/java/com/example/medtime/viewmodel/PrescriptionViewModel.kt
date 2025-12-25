@@ -1,5 +1,6 @@
 package com.example.medtime.viewmodel
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -11,6 +12,8 @@ import com.example.medtime.ai.GeminiApiService
 import com.example.medtime.data.MedicationResponse
 import com.example.medtime.data.ParsedMedication
 import com.example.medtime.data.UserSession
+import com.example.medtime.notification.MedicationScheduler
+import com.example.medtime.notification.NotificationHelper
 import com.example.medtime.repository.PrescriptionRepository
 import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +49,7 @@ class PrescriptionViewModel : ViewModel() {
 
 
     fun analyzePrescription(image: Bitmap) {
+        // Store a scaled-down version to reduce memory
         selectedImage = image
         analysisState = AnalysisState.Loading
         modelUsed = null
@@ -54,8 +58,14 @@ class PrescriptionViewModel : ViewModel() {
             try {
                 Log.d(TAG, "Starting prescription analysis. Bitmap size: ${image.width}x${image.height}")
 
-                val result = withContext(Dispatchers.IO) {
-                    geminiApiService.extractMedicationInfo(image)
+                val result = try {
+                    withContext(Dispatchers.IO) {
+                        geminiApiService.extractMedicationInfo(image)
+                    }
+                } catch (e: OutOfMemoryError) {
+                    Log.e(TAG, "Out of memory error during analysis", e)
+                    analysisState = AnalysisState.Error("Out of memory. Please try with a smaller image.")
+                    return@launch
                 }
 
                 Log.d(TAG, "Received response from Gemini API using model: ${result.modelUsed}")
@@ -81,6 +91,9 @@ class PrescriptionViewModel : ViewModel() {
                         "Failed to parse medication data: ${e.message}\n\nRaw response: ${result.response}"
                     )
                 }
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "Out of memory error", e)
+                analysisState = AnalysisState.Error("Out of memory. Please try with a smaller image.")
             } catch (e: Exception) {
                 Log.e(TAG, "Analysis failed", e)
                 analysisState = AnalysisState.Error(
@@ -107,7 +120,7 @@ class PrescriptionViewModel : ViewModel() {
         }
     }
 
-    fun savePrescription() {
+    fun savePrescription(context: Context) {
         val user = UserSession.getUser()
         if (user == null) {
             saveState = SaveState.Error("User not logged in")
@@ -140,6 +153,18 @@ class PrescriptionViewModel : ViewModel() {
                 result.fold(
                     onSuccess = { prescriptionId ->
                         Log.d(TAG, "Prescription saved with ID: $prescriptionId")
+
+                        // Create notification channel
+                        NotificationHelper.createNotificationChannel(context)
+
+                        // Schedule medication reminders
+                        MedicationScheduler.scheduleMedications(
+                            context = context,
+                            medications = editableMedications,
+                            prescriptionId = prescriptionId
+                        )
+                        Log.d(TAG, "Scheduled reminders for ${editableMedications.size} medications")
+
                         saveState = SaveState.Success(prescriptionId)
                     },
                     onFailure = { error ->

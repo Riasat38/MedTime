@@ -48,6 +48,13 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Fix for 16KB page size compatibility (Android 15+)
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -68,10 +75,10 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
 
-    // CameraX for image capture
-    implementation("androidx.camera:camera-camera2:1.3.0")
-    implementation("androidx.camera:camera-lifecycle:1.3.0")
-    implementation("androidx.camera:camera-view:1.3.0")
+    // CameraX for image capture (updated for 16KB page size support)
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
 
     // Image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
@@ -79,9 +86,12 @@ dependencies {
     // Firebase BOM (Bill of Materials) - manages Firebase versions
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
 
-    // Google AI SDK (for Gemini with API Key)
+    // Google AI SDK (for Gemini with API Key) - Updated to latest
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
+    // Coroutines for async operations (required by Generative AI)
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // Firebase Authentication
     implementation("com.google.firebase:firebase-auth")
@@ -89,10 +99,8 @@ dependencies {
     // Firebase Firestore
     implementation("com.google.firebase:firebase-firestore")
 
-    // Coroutines for async operations
-    //implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
-    //implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
-
+    //Notification Manager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
