@@ -5,6 +5,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -14,6 +15,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Photo
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,11 +27,13 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.example.medtime.components.GradientButton
 import com.example.medtime.components.MedTimeTopAppBar
+import com.example.medtime.components.MedicationCard
 import com.example.medtime.data.UserSession
 import com.example.medtime.viewmodel.AnalysisState
 import com.example.medtime.viewmodel.PrescriptionViewModel
+import com.example.medtime.viewmodel.SaveState
 import java.io.File
-import java.io.IOException
+import kotlin.math.min
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,6 +46,36 @@ fun PrescriptionScreen(
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
+    // Helper function to resize and prepare bitmap for API
+    fun prepareBitmapForAnalysis(bitmap: Bitmap): Bitmap {
+        try {
+            // Convert hardware bitmap to software bitmap if needed
+            val softwareBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+                bitmap.copy(Bitmap.Config.ARGB_8888, false)
+            } else {
+                bitmap
+            }
+
+            // Resize if too large (max 1024px on longest side to prevent memory issues)
+            val maxSize = 1024
+            val width = softwareBitmap.width
+            val height = softwareBitmap.height
+
+            if (width <= maxSize && height <= maxSize) {
+                return softwareBitmap
+            }
+
+            val scale = min(maxSize.toFloat() / width, maxSize.toFloat() / height)
+            val newWidth = (width * scale).toInt()
+            val newHeight = (height * scale).toInt()
+
+            return Bitmap.createScaledBitmap(softwareBitmap, newWidth, newHeight, true)
+        } catch (e: Exception) {
+            Log.e("PrescriptionScreen", "Error preparing bitmap: ${e.message}", e)
+            throw e
+        }
+    }
+
     // Camera launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -49,15 +83,20 @@ fun PrescriptionScreen(
         if (success && imageUri != null) {
             try {
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, imageUri!!))
+                    val source = ImageDecoder.createSource(context.contentResolver, imageUri!!)
+                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        decoder.isMutableRequired = false
+                    }
                 } else {
                     @Suppress("DEPRECATION")
                     MediaStore.Images.Media.getBitmap(context.contentResolver, imageUri)
                 }
-                capturedBitmap = bitmap
-                viewModel.analyzePrescription(bitmap)
-            } catch (e: IOException) {
-                e.printStackTrace()
+                val preparedBitmap = prepareBitmapForAnalysis(bitmap)
+                capturedBitmap = preparedBitmap
+                viewModel.analyzePrescription(preparedBitmap)
+            } catch (e: Exception) {
+                Log.e("PrescriptionScreen", "Error processing camera image: ${e.message}", e)
             }
         }
     }
@@ -69,15 +108,20 @@ fun PrescriptionScreen(
         uri?.let {
             try {
                 val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
+                    val source = ImageDecoder.createSource(context.contentResolver, it)
+                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                        decoder.isMutableRequired = false
+                    }
                 } else {
                     @Suppress("DEPRECATION")
                     MediaStore.Images.Media.getBitmap(context.contentResolver, it)
                 }
-                capturedBitmap = bitmap
-                viewModel.analyzePrescription(bitmap)
-            } catch (e: IOException) {
-                e.printStackTrace()
+                val preparedBitmap = prepareBitmapForAnalysis(bitmap)
+                capturedBitmap = preparedBitmap
+                viewModel.analyzePrescription(preparedBitmap)
+            } catch (e: Exception) {
+                Log.e("PrescriptionScreen", "Error processing gallery image: ${e.message}", e)
             }
         }
     }
@@ -180,7 +224,7 @@ fun PrescriptionScreen(
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            Text(text="Your photo is being analyzed using  gemini-2.5-flash model by Google")
+
             Spacer(modifier = Modifier.height(24.dp))
             // Display captured image
             capturedBitmap?.let { bitmap ->
@@ -210,7 +254,7 @@ fun PrescriptionScreen(
             // Display analysis state
             when (val state = viewModel.analysisState) {
                 is AnalysisState.Idle -> {
-                    // Show nothing or instructions
+                    Text(text="Using Models from Google Gemini")
                 }
                 is AnalysisState.Loading -> {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -222,27 +266,116 @@ fun PrescriptionScreen(
                     )
                 }
                 is AnalysisState.Success -> {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                    // Header
+                    Text(
+                        text = "Analysis Complete ✓",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    Text(
+                        text = "Review and edit the extracted medications below:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // Display each medication as an editable card
+                    state.medications.forEachIndexed { index, medication ->
+                        MedicationCard(
+                            medication = medication,
+                            index = index,
+                            onMedicationUpdated = { updatedMedication ->
+                                viewModel.updateMedication(index, updatedMedication)
+                            }
                         )
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Analysis Result:",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.padding(bottom = 12.dp)
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Display which model was used
+                    Text(
+                        text = "Analyzed using: ${state.modelUsed}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Save state handling
+                    when (val saveState = viewModel.saveState) {
+                        is SaveState.Idle -> {
+                            // Save button
+                            GradientButton(
+                                text = "Save",
+                                onClick = { viewModel.savePrescription() },
+                                modifier = Modifier.fillMaxWidth(),
+                                isOutlined = false,
+                                icon = Icons.Default.Save,
+                                height = 50.dp
                             )
-                            Text(
-                                text = state.result,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                        }
+                        is SaveState.Saving -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Saving prescription...",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                        is SaveState.Success -> {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Text(
+                                    text = "✓ Prescription saved successfully!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        }
+                        is SaveState.Error -> {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = "Failed to save: ${saveState.message}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    GradientButton(
+                                        text = "Retry Save",
+                                        onClick = { viewModel.savePrescription() },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        isOutlined = false,
+                                        icon = Icons.Default.Save,
+                                        height = 44.dp
+                                    )
+                                }
+                            }
                         }
                     }
 
@@ -303,3 +436,4 @@ fun PrescriptionScreen(
         }
     }
 }
+

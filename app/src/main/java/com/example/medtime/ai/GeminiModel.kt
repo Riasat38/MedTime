@@ -1,56 +1,192 @@
 package com.example.medtime.ai
 
 import android.graphics.Bitmap
+import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.example.medtime.BuildConfig
 
+private const val TAG = "GeminiApiService"
+
+data class GeminiResult(
+    val response: String,
+    val modelUsed: String
+)
 
 class GeminiApiService() {
     val apiKey = BuildConfig.GEMINI_API_KEY
 
+    val models = listOf(
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+        "gemini-2.0-flash-lite"
+    )
+
     suspend fun extractMedicationInfo(
         imageBitmap: Bitmap,
         context: String = "Extract medication information from this prescription"
-    ): String = withContext(Dispatchers.IO) {
-        try {
-            val generativeModel = GenerativeModel(
-                modelName = "gemini-2.5-flash",
-                apiKey = apiKey
-            )
-            val prompt = """
-                $context
+    ): GeminiResult = withContext(Dispatchers.IO) {
+        Log.d(TAG, "Starting extraction. Bitmap: ${imageBitmap.width}x${imageBitmap.height}, config: ${imageBitmap.config}")
 
-                Extract medication information in this JSON format:
-                {
-                    "medications": [
-                        {
-                            "name": "Medicine name",
-                            "dosage": "e.g., 500mg",
-                            "frequency": "e.g., Twice daily",
-                            "times": ["08:00", "20:00"],
-                            "duration_days": 7,
-                            "instructions": "Additional instructions"
-                        }
-                    ]
+        // Ensure bitmap is in correct format
+        val safeBitmap = if (imageBitmap.config == Bitmap.Config.HARDWARE) {
+            Log.d(TAG, "Converting hardware bitmap to software bitmap")
+            imageBitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            imageBitmap
+        }
+
+        val prompt = buildPrompt(context)
+        var lastException: Exception? = null
+
+        // Try each model sequentially until one succeeds
+        for (modelName in models) {
+            try {
+                Log.d(TAG, "Trying model: $modelName")
+
+                val generativeModel = GenerativeModel(
+                    modelName = modelName,
+                    apiKey = apiKey
+                )
+
+                val content = content {
+                    text(prompt)
+                    image(safeBitmap)
                 }
 
-                Only return valid JSON.
-            """.trimIndent()
+                val response = generativeModel.generateContent(content)
+                Log.d(TAG, "Successfully received response from model: $modelName")
 
-            // Call Gemini with image
-            val content = content {
-                text(prompt)
-                image(imageBitmap)
+                val text = response.text ?: throw Exception("No response from AI")
+                return@withContext GeminiResult(response = text, modelUsed = modelName)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Model $modelName failed: ${e.message}", e)
+                lastException = e
+
+                // Check if it's a rate limit, quota, or model availability error
+                val errorMessage = e.message?.lowercase() ?: ""
+                val isModelError = errorMessage.contains("rate limit") ||
+                        errorMessage.contains("quota") ||
+                        errorMessage.contains("resource exhausted") ||
+                        errorMessage.contains("429") ||
+                        errorMessage.contains("503") ||
+                        errorMessage.contains("unavailable") ||
+                        errorMessage.contains("overloaded") ||
+                        errorMessage.contains("capacity") ||
+                        errorMessage.contains("too many requests") ||
+                        errorMessage.contains("limit exceeded") ||
+                        errorMessage.contains("model not found") ||
+                        errorMessage.contains("not supported")
+
+                if (isModelError) {
+                    Log.w(TAG, "Model $modelName has limit/availability issues, trying next model...")
+                    continue // Try next model
+                } else {
+                    // For other errors (like invalid image, network issues), don't switch models
+                    throw Exception("Failed to extract information: ${e.message}")
+                }
             }
-
-            val response = generativeModel.generateContent(content)
-
-            response.text ?: throw Exception("No response from AI")
-        } catch (e: Exception) {
-            throw Exception("Failed to extract information: ${e.message}")
         }
+
+        // All models failed
+        throw Exception("All models exhausted. Last error: ${lastException?.message}")
+    }
+
+    private fun buildPrompt(context: String): String {
+        return """
+                $context
+You are a medical prescription analyzer. Extract ALL medication information from this prescription image and return it in the specified JSON format.
+
+CRITICAL INSTRUCTIONS:
+
+1. LANGUAGE HANDLING:
+   - Prescriptions may contain Bengali, English, or mixed text
+   - Bengali numbers: ০=0, ১=1, ২=2, ৩=3, ৪=4, ৫=5, ৬=6, ৭=7, ৮=8, ৯=9
+   - Bengali duration words: দিন=days, সপ্তাহ=weeks, মাস=months, বছর=years
+   - Convert all numbers to English numerals in output
+
+2. FREQUENCY EXTRACTION: Always convert to numeric value representing doses per day:
+   - "once daily" / "OD" / "১বার" → 1
+   - "twice daily" / "BD" / "BID" / "২বার" → 2
+   - "thrice daily" / "TDS" / "TID" / "৩বার" → 3
+   - "four times daily" / "QID" / "৪বার" → 4
+   - "once weekly" / "once a week" / "সপ্তাহে একবার" → frequency_type: "weekly", frequency: 1
+   - "twice weekly" / "সপ্তাহে দুইবার" → frequency_type: "weekly", frequency: 2
+   - "once monthly" / "মাসে একবার" → frequency_type: "monthly", frequency: 1
+   - "twice monthly" / "মাসে দুইবার" → frequency_type: "monthly", frequency: 2
+
+3. DURATION EXTRACTION (CRITICAL):
+   - Look for duration NEXT TO or AFTER each medicine name
+   - Patterns to detect:
+     * "X দিন" / "X days" → X days
+     * "X সপ্তাহ" / "X weeks" → X*7 days
+     * "X মাস" / "X months" → X*30 days
+     * "X বছর" / "X years" → X*365 days
+     * "for X days/weeks/months"
+     * Numbers followed by "দিন/days" or "সপ্তাহ/weeks"
+   - Convert Bengali numerals to English
+   - Examples: "১৫ দিন" → 15, "৭ দিন" → 7, "২ সপ্তাহ" → 14, "১ মাস" → 30
+   - If duration appears ONCE at the bottom for ALL medicines, apply to ALL
+   - If no duration found, use null
+
+4. TIMES GENERATION: Generate appropriate time slots based on frequency:
+   - Once daily → ["09:00"]
+   - Twice daily → ["09:00", "21:00"]
+   - Thrice daily → ["09:00", "15:00", "21:00"]
+   - Four times daily → ["08:00", "14:00", "20:00", "22:00"]
+   - Weekly medications → ["09:00"]
+   - Monthly medications → ["09:00"]
+   - Specific times: সকাল/morning=08:00, দুপুর/afternoon=14:00, সন্ধ্যা/evening=18:00, রাত/night=21:00
+   - Meal-based: খাবার আগে/before meals → breakfast=08:00, lunch=13:00, dinner=20:00
+   - খাবার পরে/after meals → 09:00, 14:00, 21:00
+
+5. COMMON NOTATIONS:
+   - "1-0-1" / "1+0+1" / "১-০-১" → frequency: 2, times: ["09:00", "21:00"]
+   - "1-1-1" / "১-১-১" → frequency: 3, times: ["09:00", "15:00", "21:00"]
+   - "0-0-1" / "০-০-১" → frequency: 1, times: ["21:00"]
+   - "1-0-0" / "১-০-০" → frequency: 1, times: ["09:00"]
+   - "0-1-0" / "০-১-০" → frequency: 1, times: ["15:00"]
+
+6. SPECIAL INSTRUCTIONS TO CAPTURE:
+   - খাবার আগে / before food / before meals
+   - খাবার পরে / after food / after meals
+   - ঘুমানোর আগে / before sleep / at bedtime
+   - খালি পেটে / empty stomach
+   - পানির সাথে / with water
+
+7. DEFAULTS (if unclear or missing):
+   - frequency: 1
+   - frequency_type: "daily"
+   - times: ["09:00"]
+   - duration_days: null
+
+OUTPUT FORMAT (strict JSON only, no additional text):
+{
+    "medications": [
+        {
+            "name": "Medicine name exactly as written",
+            "dosage": "e.g., 500mg, 10ml, 1 tablet",
+            "frequency": 2,
+            "frequency_type": "daily",
+            "times": ["09:00", "21:00"],
+            "duration_days": 15,
+            "instructions": "After food, before sleep, etc."
+        }
+    ]
+}
+
+IMPORTANT RULES:
+- frequency_type must be one of: "daily", "weekly", "monthly"
+- duration_days must be a NUMBER (convert Bengali to English) or null
+- Extract duration for EACH medicine individually
+- Convert ALL Bengali text/numbers in output to English
+- Return ONLY valid JSON, no preamble, no explanation, no markdown
+
+Analyze the prescription carefully and extract each medicine with its specific duration.
+                """.trimIndent()
     }
 }

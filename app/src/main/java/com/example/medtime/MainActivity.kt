@@ -12,10 +12,10 @@ import com.example.medtime.ui.theme.MedTimeTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        
         // Initialize session management
         UserSession.initialize(this)
-
+        
         enableEdgeToEdge()
         setContent {
             MedTimeTheme {

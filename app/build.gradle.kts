@@ -82,6 +82,7 @@ dependencies {
     // Google AI SDK (for Gemini with API Key)
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
+
     // Firebase Authentication
     implementation("com.google.firebase:firebase-auth")
 
