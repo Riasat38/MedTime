@@ -4,6 +4,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.medtime.data.ParsedMedication
 import com.example.medtime.ui.theme.Blue600
@@ -140,7 +142,7 @@ fun MedicationCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Name Field (Read-only)
+            // Name Field
             ReadOnlyField(
                 label = "Medicine Name",
                 value = editedMedication.name
@@ -148,7 +150,7 @@ fun MedicationCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Dosage Field (Read-only)
+            // Dosage Field
             ReadOnlyField(
                 label = "Dosage",
                 value = editedMedication.dosage
@@ -156,7 +158,7 @@ fun MedicationCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Frequency Field (Read-only)
+            // Frequency Field
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -178,10 +180,22 @@ fun MedicationCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Duration Field (Read-only)
-            ReadOnlyField(
-                label = "Duration (days)",
-                value = editedMedication.durationDays?.toString() ?: "Not specified"
+            // Duration Field
+            OutlinedTextField(
+                value = editedMedication.durationDays?.toString() ?: "",
+                onValueChange = { newValue ->
+                    // Allow only digits and ensure it's not overly long
+                    if (newValue.all { it.isDigit() } && newValue.length <= 3) {
+                        val duration = newValue.toIntOrNull()
+                        editedMedication = editedMedication.copy(durationDays = duration)
+                        onMedicationUpdated(editedMedication)
+                    }
+                },
+                label = { Text("Duration (days)") },
+                placeholder = { Text("e.g., 7") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -221,7 +235,7 @@ fun MedicationCard(
 @Composable
 private fun ReadOnlyField(
     label: String,
-    value: String
+    value: String?
 ) {
     Column {
         Text(
@@ -232,9 +246,9 @@ private fun ReadOnlyField(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = value.ifEmpty { "Not specified" },
+            text = value?.ifEmpty { "Not specified" }?: "Not specified",
             style = MaterialTheme.typography.bodyLarge,
-            color = if (value.isEmpty()) Color.Gray else MaterialTheme.colorScheme.onSurface,
+            color = if (value.isNullOrEmpty()) Color.Gray else MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(vertical = 4.dp)
         )
     }

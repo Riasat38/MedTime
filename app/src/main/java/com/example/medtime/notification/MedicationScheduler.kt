@@ -4,171 +4,249 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import com.example.medtime.data.ParsedMedication
-import java.util.Calendar
+import java.util.*
+import kotlin.math.absoluteValue
+
 
 object MedicationScheduler {
+
     private const val TAG = "MedicationScheduler"
-    
+
+    /**
+     * Schedules push notifications for all medications based on times and duration
+     * Example: times=["09:00", "21:00"], duration="7" → 2 notifications per day for 7 days
+     */
     fun scheduleMedications(
         context: Context,
         medications: List<ParsedMedication>,
         prescriptionId: String
     ) {
-        Log.d(TAG, "Scheduling ${medications.size} medications for prescription: $prescriptionId")
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        var totalScheduled = 0
 
-        medications.forEachIndexed { medicationIndex, medication ->
-            scheduleMedicationReminders(
-                context = context,
-                medication = medication,
-                prescriptionId = prescriptionId,
-                medicationIndex = medicationIndex
-            )
+        medications.forEachIndexed { medIndex, medication ->
+            // Parse duration (extract number from strings like "7 days", "14", etc.)
+            val durationDays = parseDuration(medication.durationDays.toString())
+
+            if (durationDays <= 0) {
+                Log.w(TAG, "Invalid duration for ${medication.name}: ${medication.durationDays}")
+                return@forEachIndexed
+            }
+
+            medication.times.forEachIndexed { timeIndex, time ->
+                // Schedule notification for each day in the duration
+                for (day in 0 until durationDays) {
+                    scheduleMedicationReminder(
+                        context = context,
+                        alarmManager = alarmManager,
+                        medication = medication,
+                        time = time,
+                        dayOffset = day,
+                        medicationIndex = medIndex,
+                        timeIndex = timeIndex,
+                        prescriptionId = prescriptionId
+                    )
+                    totalScheduled++
+                }
+            }
+
+            Log.d(TAG, "Scheduled ${medication.times.size} times × $durationDays days = ${medication.times.size * durationDays} notifications for ${medication.name}")
+        }
+
+        Log.d(TAG, "Total notifications scheduled: $totalScheduled")
+    }
+
+    /**
+     * Parses duration string to get number of days
+     * Examples: "7", "7 days", "14 days", "1 week" → returns the number
+     */
+    private fun parseDuration(duration: String): Int {
+        return try {
+            // Remove non-numeric characters and parse
+            val cleaned = duration.replace(Regex("[^0-9]"), "")
+            cleaned.toIntOrNull() ?: 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing duration: $duration", e)
+            0
         }
     }
 
     /**
-     * Schedule reminders for a single medication at all its times
+     * Schedules a single medication reminder for a specific day
      */
-    private fun scheduleMedicationReminders(
-        context: Context,
-        medication: ParsedMedication,
-        prescriptionId: String,
-        medicationIndex: Int
-    ) {
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-
-        medication.times.forEachIndexed { timeIndex, time ->
-            val notificationId = generateNotificationId(prescriptionId, medicationIndex, timeIndex)
-
-            val triggerTime = getNextTriggerTime(time)
-            if (triggerTime != null) {
-                scheduleAlarm(
-                    context = context,
-                    alarmManager = alarmManager,
-                    medication = medication,
-                    notificationId = notificationId,
-                    triggerTimeMillis = triggerTime
-                )
-                Log.d(TAG, "Scheduled ${medication.name} at $time (id: $notificationId)")
-            } else {
-                Log.w(TAG, "Could not parse time: $time for ${medication.name}")
-            }
-        }
-    }
-
-
-    private fun scheduleAlarm(
+    private fun scheduleMedicationReminder(
         context: Context,
         alarmManager: AlarmManager,
         medication: ParsedMedication,
-        notificationId: Int,
-        triggerTimeMillis: Long
+        time: String,
+        dayOffset: Int,
+        medicationIndex: Int,
+        timeIndex: Int,
+        prescriptionId: String
     ) {
-        val intent = Intent(context, MedicationReminderReceiver::class.java).apply {
-            putExtra(MedicationReminderReceiver.EXTRA_NOTIFICATION_ID, notificationId)
-            putExtra(MedicationReminderReceiver.EXTRA_MEDICATION_NAME, medication.name)
-            putExtra(MedicationReminderReceiver.EXTRA_DOSAGE, medication.dosage)
-            putExtra(MedicationReminderReceiver.EXTRA_INSTRUCTIONS, medication.instructions)
-        }
-
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            notificationId,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
         try {
-            // Use setRepeating for daily reminders
-            alarmManager.setRepeating(
-                AlarmManager.RTC_WAKEUP,
-                triggerTimeMillis,
-                AlarmManager.INTERVAL_DAY, // Repeat daily
-                pendingIntent
-            )
-        } catch (e: SecurityException) {
-            Log.e(TAG, "No permission to schedule exact alarm", e)
-            // Fallback to inexact alarm
-            alarmManager.setInexactRepeating(
-                AlarmManager.RTC_WAKEUP,
-                triggerTimeMillis,
-                AlarmManager.INTERVAL_DAY,
-                pendingIntent
-            )
-        }
-    }
+            // Parse time (format: "HH:mm" or "H:mm")
+            val timeParts = time.trim().replace(" ", "").split(":")
+            if (timeParts.size != 2) {
+                Log.e(TAG, "Invalid time format: $time")
+                return
+            }
 
-    /**
-     * Parse time string (HH:mm) and get next trigger time in milliseconds
-     */
-    private fun getNextTriggerTime(timeString: String): Long? {
-        return try {
-            val parts = timeString.split(":")
-            if (parts.size != 2) return null
+            val hour = timeParts[0].toIntOrNull()
+            val minute = timeParts[1].toIntOrNull()
 
-            val hour = parts[0].toIntOrNull() ?: return null
-            val minute = parts[1].toIntOrNull() ?: return null
+            if (hour == null || minute == null || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+                Log.e(TAG, "Invalid time values: $time")
+                return
+            }
 
+            // Create calendar for the reminder time
             val calendar = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, hour)
                 set(Calendar.MINUTE, minute)
                 set(Calendar.SECOND, 0)
                 set(Calendar.MILLISECOND, 0)
 
-                // If the time has already passed today, schedule for tomorrow
+                // Add day offset
+                add(Calendar.DAY_OF_YEAR, dayOffset)
+
+                // If this specific time has already passed, skip it
                 if (timeInMillis <= System.currentTimeMillis()) {
-                    add(Calendar.DAY_OF_MONTH, 1)
+                    Log.d(TAG, "Skipping past time: ${medication.name} on day $dayOffset at $time")
+                    return
                 }
             }
 
-            calendar.timeInMillis
+            // Create unique request code for this specific notification
+            val requestCode = generateRequestCode(prescriptionId, medicationIndex, timeIndex, dayOffset)
+
+            // Create intent for the broadcast receiver
+            val intent = Intent(context, MedicationReminderReceiver::class.java).apply {
+                putExtra(MedicationReminderReceiver.EXTRA_MEDICATION_NAME, medication.name)
+                putExtra(MedicationReminderReceiver.EXTRA_DOSAGE, medication.dosage)
+                putExtra(MedicationReminderReceiver.EXTRA_INSTRUCTIONS, medication.instructions)
+                putExtra(MedicationReminderReceiver.EXTRA_NOTIFICATION_ID, requestCode)
+            }
+
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                requestCode,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // Schedule the exact alarm
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+            } else {
+                alarmManager.setExact(
+                    AlarmManager.RTC_WAKEUP,
+                    calendar.timeInMillis,
+                    pendingIntent
+                )
+            }
+
+            Log.d(TAG, "✓ Scheduled ${medication.name} for Day ${dayOffset + 1} at ${calendar.time}")
+
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing time: $timeString", e)
-            null
+            Log.e(TAG, "Error scheduling medication: ${medication.name}", e)
         }
     }
 
     /**
-     * Generate unique notification ID based on prescription, medication, and time indices
+     * Generates a unique request code for each medication + time + day combination
+     * This ensures each notification is independent and can be cancelled individually
      */
-    private fun generateNotificationId(
+    private fun generateRequestCode(
         prescriptionId: String,
         medicationIndex: Int,
-        timeIndex: Int
+        timeIndex: Int,
+        dayOffset: Int
     ): Int {
-        return (prescriptionId.hashCode() + medicationIndex * 100 + timeIndex)
+        // Create a unique code using prescription ID hash + indices + day
+        val hashCode = prescriptionId.hashCode()
+        return (hashCode + medicationIndex * 100000 + timeIndex * 10000 + dayOffset).absoluteValue % Int.MAX_VALUE
     }
 
     /**
-     * Cancel all reminders for a prescription
+     * Cancels all scheduled reminders for a prescription
      */
     fun cancelMedicationReminders(
         context: Context,
-        medications: List<ParsedMedication>,
-        prescriptionId: String
+        prescriptionId: String,
+        medications: List<ParsedMedication>
     ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        var totalCancelled = 0
 
-        medications.forEachIndexed { medicationIndex, medication ->
+        medications.forEachIndexed { medIndex, medication ->
+            val durationDays = parseDuration(medication.durationDays.toString())
+
             medication.times.forEachIndexed { timeIndex, _ ->
-                val notificationId = generateNotificationId(prescriptionId, medicationIndex, timeIndex)
+                // Cancel notification for each day
+                for (day in 0 until durationDays) {
+                    val requestCode = generateRequestCode(prescriptionId, medIndex, timeIndex, day)
 
-                val intent = Intent(context, MedicationReminderReceiver::class.java)
-                val pendingIntent = PendingIntent.getBroadcast(
-                    context,
-                    notificationId,
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-
-                alarmManager.cancel(pendingIntent)
-                pendingIntent.cancel()
-
-                Log.d(TAG, "Cancelled reminder for ${medication.name} (id: $notificationId)")
+                    val intent = Intent(context, MedicationReminderReceiver::class.java)
+                    val pendingIntent = PendingIntent.getBroadcast(
+                        context,
+                        requestCode,
+                        intent,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    alarmManager.cancel(pendingIntent)
+                    totalCancelled++
+                }
             }
         }
+
+        Log.d(TAG, "Cancelled $totalCancelled notifications for prescription: $prescriptionId")
+    }
+
+    /**
+     * Gets the total number of notifications that will be scheduled
+     */
+    fun getTotalNotificationCount(medications: List<ParsedMedication>): Int {
+        var total = 0
+        medications.forEach { medication ->
+            val durationDays = parseDuration(medication.durationDays.toString())
+            total += medication.times.size * durationDays
+        }
+        return total
+    }
+
+    /**
+     * Checks if app can schedule exact alarms (Android 12+)
+     */
+    fun canScheduleExactAlarms(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            alarmManager.canScheduleExactAlarms()
+        } else {
+            true
+        }
+    }
+
+    /**
+     * Gets a list of all scheduled notification times for preview
+     */
+    fun getScheduledTimesPreview(medications: List<ParsedMedication>): List<String> {
+        val preview = mutableListOf<String>()
+
+        medications.forEach { medication ->
+            val durationDays = parseDuration(medication.durationDays.toString())
+            medication.times.forEach { time ->
+                preview.add("${medication.name} at $time for $durationDays days")
+            }
+        }
+
+        return preview
     }
 }
-

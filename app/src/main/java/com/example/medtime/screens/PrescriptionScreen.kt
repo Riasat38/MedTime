@@ -1,14 +1,12 @@
 package com.example.medtime.screens
 
-import android.graphics.Bitmap
-import android.graphics.ImageDecoder
+
 import android.net.Uri
 import android.os.Build
-import android.provider.MediaStore
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -20,7 +18,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +30,11 @@ import com.example.medtime.viewmodel.AnalysisState
 import com.example.medtime.viewmodel.PrescriptionViewModel
 import com.example.medtime.viewmodel.SaveState
 import java.io.File
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.medtime.components.NotificationPreviewCard
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,9 +44,13 @@ fun PrescriptionScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
+    var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+
+    var selectedNotification by remember { mutableStateOf("") }
+    var expandedNotification by remember { mutableStateOf(false) }
+    val notificationOptions = listOf("push", "alarm")
     // Snackbar host state
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -56,55 +62,20 @@ fun PrescriptionScreen(
                 duration = SnackbarDuration.Short
             )
             // Reset the screen after showing snackbar
-            capturedBitmap = null
-            viewModel.resetAnalysis()
+            capturedImageUri = null
+
         }
     }
 
-    // Helper function to prepare bitmap for API (convert to software bitmap)
-    fun prepareBitmapForAnalysis(bitmap: Bitmap): Bitmap {
-        return try {
-            // Convert hardware bitmap to software bitmap if needed
-            if (bitmap.config == Bitmap.Config.HARDWARE) {
-                bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: bitmap
-            } else {
-                bitmap
-            }
-        } catch (e: Exception) {
-            Log.e("PrescriptionScreen", "Error preparing bitmap: ${e.message}", e)
-            bitmap // Return original if conversion fails
-        } catch (e: OutOfMemoryError) {
-            Log.e("PrescriptionScreen", "Out of memory preparing bitmap", e)
-            bitmap // Return original if OOM
-        }
-    }
 
     // Camera launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
         if (success && imageUri != null) {
-            try {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = ImageDecoder.createSource(context.contentResolver, imageUri!!)
-                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                        decoder.isMutableRequired = false
-                        // Set sample size to reduce memory usage
-                        decoder.setTargetSampleSize(2)
-                    }
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, imageUri)
-                }
-                val preparedBitmap = prepareBitmapForAnalysis(bitmap)
-                capturedBitmap = preparedBitmap
-                viewModel.analyzePrescription(preparedBitmap)
-            } catch (e: OutOfMemoryError) {
-                Log.e("PrescriptionScreen", "Out of memory processing camera image", e)
-            } catch (e: Exception) {
-                Log.e("PrescriptionScreen", "Error processing camera image: ${e.message}", e)
-            }
+            capturedImageUri = imageUri
+            viewModel.setSelectedImage(imageUri!!)
+            viewModel.analyzeImage(context)
         }
     }
 
@@ -113,27 +84,9 @@ fun PrescriptionScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            try {
-                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    val source = ImageDecoder.createSource(context.contentResolver, it)
-                    ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                        decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                        decoder.isMutableRequired = false
-                        // Set sample size to reduce memory usage
-                        decoder.setTargetSampleSize(2)
-                    }
-                } else {
-                    @Suppress("DEPRECATION")
-                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
-                }
-                val preparedBitmap = prepareBitmapForAnalysis(bitmap)
-                capturedBitmap = preparedBitmap
-                viewModel.analyzePrescription(preparedBitmap)
-            } catch (e: OutOfMemoryError) {
-                Log.e("PrescriptionScreen", "Out of memory processing gallery image", e)
-            } catch (e: Exception) {
-                Log.e("PrescriptionScreen", "Error processing gallery image: ${e.message}", e)
-            }
+            capturedImageUri = it
+            viewModel.setSelectedImage(it)
+            viewModel.analyzeImage(context)
         }
     }
 
@@ -247,7 +200,7 @@ fun PrescriptionScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             // Display captured image
-            capturedBitmap?.let { bitmap ->
+            capturedImageUri?.let { uri ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -260,12 +213,17 @@ fun PrescriptionScreen(
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(uri)
+                                .crossfade(true)
+                                .size(800)
+                                .build(),
                             contentDescription = "Selected prescription",
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 300.dp)
+                                .heightIn(max = 300.dp),
+                            contentScale = ContentScale.Fit
                         )
                     }
                 }
@@ -328,15 +286,102 @@ fun PrescriptionScreen(
                     // Save state handling
                     when (val saveState = viewModel.saveState) {
                         is SaveState.Idle -> {
+
+                            ExposedDropdownMenuBox(
+                                expanded = expandedNotification,
+                                onExpandedChange = { expandedNotification = !expandedNotification },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = selectedNotification,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    label = { Text("Reminder Method") },
+                                    placeholder = { Text("Select how you want to be reminded") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedNotification)
+                                    },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = expandedNotification,
+                                    onDismissRequest = { expandedNotification = false }
+                                ) {
+                                    notificationOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option) },
+                                            onClick = {
+                                                selectedNotification = option
+                                                expandedNotification = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            //validation
+                            if (selectedNotification.isEmpty()) {
+                                Text(
+                                    text = "Please select a reminder method before saving",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+
+                            }
+                            if (selectedNotification.isNotEmpty()){
+                                // Show notification preview if notification type is selected
+                                NotificationPreviewCard(
+                                    medications = state.medications,
+                                    notificationType = selectedNotification,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+
+
                             // Save button
                             GradientButton(
                                 text = "Save",
-                                onClick = { viewModel.savePrescription(context) },
+                                onClick = { viewModel.savePrescription(context, selectedNotification) },
                                 modifier = Modifier.fillMaxWidth(),
                                 isOutlined = false,
                                 icon = Icons.Default.Save,
                                 height = 50.dp
                             )
+                            // Add this at the top with other launchers
+                            val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                                contract = ActivityResultContracts.RequestPermission()
+                            ) { isGranted ->
+                                if (isGranted) {
+                                    Log.d("PrescriptionScreen", "Notification permission granted")
+                                } else {
+                                    // Show a message to user
+                                    Toast.makeText(context, "Notification permission is required for reminders", Toast.LENGTH_LONG).show()
+                                }
+                            }
+
+                            // Request permission on first launch
+                            LaunchedEffect(Unit) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+
+
+
+                        }
+                        is SaveState.Success -> {
+
+
+                            viewModel.resetAnalysis()
+
                         }
                         is SaveState.Saving -> {
                             Row(
@@ -349,24 +394,6 @@ fun PrescriptionScreen(
                                 Text(
                                     text = "Saving prescription...",
                                     style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                        is SaveState.Success -> {
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                                )
-                            ) {
-                                Text(
-                                    text = "✓ Prescription saved successfully!",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(16.dp)
                                 )
                             }
                         }
@@ -388,7 +415,7 @@ fun PrescriptionScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     GradientButton(
                                         text = "Retry Save",
-                                        onClick = { viewModel.savePrescription(context) },
+                                        onClick = { viewModel.savePrescription(context, selectedNotification) },
                                         modifier = Modifier.fillMaxWidth(),
                                         isOutlined = false,
                                         icon = Icons.Default.Save,
@@ -405,7 +432,7 @@ fun PrescriptionScreen(
                     GradientButton(
                         text = "Analyze Another Prescription",
                         onClick = {
-                            capturedBitmap = null
+                            capturedImageUri = null
                             viewModel.resetAnalysis()
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -444,7 +471,7 @@ fun PrescriptionScreen(
                     GradientButton(
                         text = "Try Again",
                         onClick = {
-                            capturedBitmap = null
+                            capturedImageUri = null
                             viewModel.resetAnalysis()
                         },
                         modifier = Modifier.fillMaxWidth(),

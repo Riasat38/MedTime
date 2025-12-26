@@ -5,34 +5,51 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.example.medtime.MainActivity
 import com.example.medtime.R
 
 object NotificationHelper {
-    const val CHANNEL_ID = "medication_reminder_channel"
+
+    const val CHANNEL_ID = "medication_reminders"
     const val CHANNEL_NAME = "Medication Reminders"
     const val CHANNEL_DESCRIPTION = "Notifications for medication reminders"
 
+    /**
+     * Creates notification channel (required for Android 8.0+)
+     */
     fun createNotificationChannel(context: Context) {
-        val importance = NotificationManager.IMPORTANCE_HIGH
-        val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
-            description = CHANNEL_DESCRIPTION
-            enableVibration(true)
-            enableLights(true)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val importance = NotificationManager.IMPORTANCE_HIGH
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                importance
+            ).apply {
+                description = CHANNEL_DESCRIPTION
+                enableVibration(true)
+                enableLights(true)
+                setShowBadge(true)
+            }
 
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.createNotificationChannel(channel)
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
     }
 
+    /**
+     * Shows a medication reminder notification
+     */
     fun showMedicationNotification(
         context: Context,
-        notificationId: Int,
         medicationName: String,
         dosage: String,
-        instructions: String
+        instructions: String,
+        notificationId: Int
     ) {
+        // Create intent to open app when notification is tapped
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -44,13 +61,14 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Build the notification
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("Time to take $medicationName")
-            .setContentText("Dosage: $dosage")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("It's Time for your medicine $medicationName")
+            .setContentText("$dosage - $instructions")
             .setStyle(
                 NotificationCompat.BigTextStyle()
-                    .bigText("Dosage: $dosage\n$instructions")
+                    .bigText("Dosage: $dosage\nInstructions: $instructions")
             )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -59,8 +77,24 @@ object NotificationHelper {
             .setVibrate(longArrayOf(0, 500, 200, 500))
             .build()
 
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(notificationId, notification)
+        // Show the notification
+        with(NotificationManagerCompat.from(context)) {
+            notify(notificationId, notification)
+        }
+    }
+
+    /**
+     * Cancels a specific notification
+     */
+    fun cancelNotification(context: Context, notificationId: Int) {
+        val notificationManager = NotificationManagerCompat.from(context)
+        notificationManager.cancel(notificationId)
+    }
+
+    /**
+     * Checks if notifications are enabled
+     */
+    fun areNotificationsEnabled(context: Context): Boolean {
+        return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 }
-

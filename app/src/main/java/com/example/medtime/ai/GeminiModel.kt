@@ -3,6 +3,7 @@ package com.example.medtime.ai
 import android.graphics.Bitmap
 import android.util.Log
 import com.google.ai.client.generativeai.GenerativeModel
+import com.google.ai.client.generativeai.type.generationConfig
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,6 +20,10 @@ class GeminiApiService {
     private val apiKey = BuildConfig.GEMINI_API_KEY
     private val modelName = "gemini-2.5-flash"
 
+    companion object {
+        private const val TAG = "GeminiApiService"
+        private const val MAX_IMAGE_DIMENSION = 2048 // Max dimension for API
+    }
     suspend fun extractMedicationInfo(
         imageBitmap: Bitmap,
         context: String = "Extract medication information from this prescription"
@@ -35,7 +40,12 @@ class GeminiApiService {
 
             val generativeModel = GenerativeModel(
                 modelName = modelName,
-                apiKey = apiKey
+                apiKey = apiKey,
+                generationConfig = generationConfig {
+                    temperature = 0.0f
+                    topK = 1
+                    topP = 1f
+                }
             )
 
             val content = content {
@@ -50,40 +60,62 @@ class GeminiApiService {
             if (text.isNullOrBlank()) {
                 throw Exception("Empty response from AI")
             }
-
+            if (safeBitmap != imageBitmap) {
+                safeBitmap.recycle()
+            }
             GeminiResult(response = text, modelUsed = modelName)
 
         } catch (e: Exception) {
             Log.e(TAG, "API call failed: ${e.message}", e)
+
+            if (safeBitmap != imageBitmap) {
+                safeBitmap.recycle()
+            }
+
             throw Exception("Failed to analyze prescription: ${e.message}")
         }
     }
 
     private fun prepareSafeBitmap(bitmap: Bitmap): Bitmap {
-        // Convert hardware bitmap to software bitmap if needed
-        var safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
-            Log.d(TAG, "Converting hardware bitmap to software bitmap")
-            bitmap.copy(Bitmap.Config.ARGB_8888, false)
-                ?: throw Exception("Failed to convert hardware bitmap")
-        } else {
-            bitmap
+        var workingBitmap = bitmap
+
+        // Step 1: Scale down if too large
+        if (bitmap.width > MAX_IMAGE_DIMENSION || bitmap.height > MAX_IMAGE_DIMENSION) {
+            val ratio = minOf(
+                MAX_IMAGE_DIMENSION.toFloat() / bitmap.width,
+                MAX_IMAGE_DIMENSION.toFloat() / bitmap.height
+            )
+            val newWidth = (bitmap.width * ratio).toInt()
+            val newHeight = (bitmap.height * ratio).toInt()
+
+            Log.d(TAG, "Scaling bitmap from ${bitmap.width}x${bitmap.height} to ${newWidth}x${newHeight}")
+
+            workingBitmap = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+
+            // If we created a new bitmap, we can recycle the original
+            if (workingBitmap != bitmap) {
+                bitmap.recycle()
+            }
         }
 
-        // Resize if too large (max 800px to be safe for memory)
-        val maxSize = 1024
-        val width = safeBitmap.width
-        val height = safeBitmap.height
+        // Step 2: Convert to RGB_565 if it's ARGB_8888 (saves 50% memory)
+        if (workingBitmap.config == Bitmap.Config.ARGB_8888) {
+            Log.d(TAG, "Converting bitmap from ARGB_8888 to RGB_565")
 
-        if (width > maxSize || height > maxSize) {
-            val scale = min(maxSize.toFloat() / width, maxSize.toFloat() / height)
-            val newWidth = (width * scale).toInt().coerceAtLeast(1)
-            val newHeight = (height * scale).toInt().coerceAtLeast(1)
-            Log.d(TAG, "Resizing bitmap from ${width}x${height} to ${newWidth}x${newHeight}")
-            val scaledBitmap = Bitmap.createScaledBitmap(safeBitmap, newWidth, newHeight, true)
-            safeBitmap = scaledBitmap
+            val rgb565Bitmap = workingBitmap.copy(Bitmap.Config.RGB_565, false)
+
+            // Recycle the ARGB bitmap if we successfully created RGB version
+            if (rgb565Bitmap != null) {
+                if (workingBitmap != bitmap) {
+                    workingBitmap.recycle()
+                }
+                workingBitmap = rgb565Bitmap
+            }
         }
 
-        return safeBitmap
+        Log.d(TAG, "Final bitmap: ${workingBitmap.width}x${workingBitmap.height}, config: ${workingBitmap.config}")
+
+        return workingBitmap
     }
 
     private fun buildPrompt(context: String): String {
