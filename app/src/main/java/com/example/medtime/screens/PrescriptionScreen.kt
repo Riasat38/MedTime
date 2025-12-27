@@ -219,7 +219,6 @@ fun PrescriptionScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
 
             Spacer(modifier = Modifier.height(24.dp))
             // Display captured image
