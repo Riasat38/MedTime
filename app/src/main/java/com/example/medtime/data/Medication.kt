@@ -1,7 +1,7 @@
 package com.example.medtime.data
 import com.google.firebase.Timestamp
 
-// Medication.kt
+
 data class Medication(
     val id: String = "",
     val userId: String = "",
@@ -13,16 +13,16 @@ data class Medication(
     val startDate: Timestamp = Timestamp.now(),
     val endDate: Timestamp,
     val notes: String = "",
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val createdAt: Timestamp = Timestamp.now()
 )
 
-// Prescription.kt
+
 data class Prescription(
     val id: String = "",
-    val userId: String = "",
-    val imageUrl: String,
-    val extractedText: String? = null,
-    val medications: List<Medication> = emptyList(),
-    val uploadDate: Timestamp = Timestamp.now(),
-    val status: String = "pending"
+    val title: String = "",
+    val medications: List<ParsedMedication> = emptyList(),
+    val modelUsed: String = "",
+    val notificationType:String ="",
+    val createdAt: Long = 0L
 )

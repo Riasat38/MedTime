@@ -17,9 +17,7 @@ object NotificationHelper {
     const val CHANNEL_NAME = "Medication Reminders"
     const val CHANNEL_DESCRIPTION = "Notifications for medication reminders"
 
-    /**
-     * Creates notification channel (required for Android 8.0+)
-     */
+
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val importance = NotificationManager.IMPORTANCE_HIGH
@@ -39,9 +37,6 @@ object NotificationHelper {
         }
     }
 
-    /**
-     * Shows a medication reminder notification
-     */
     fun showMedicationNotification(
         context: Context,
         medicationName: String,
@@ -83,17 +78,13 @@ object NotificationHelper {
         }
     }
 
-    /**
-     * Cancels a specific notification
-     */
+
     fun cancelNotification(context: Context, notificationId: Int) {
         val notificationManager = NotificationManagerCompat.from(context)
         notificationManager.cancel(notificationId)
     }
 
-    /**
-     * Checks if notifications are enabled
-     */
+
     fun areNotificationsEnabled(context: Context): Boolean {
         return NotificationManagerCompat.from(context).areNotificationsEnabled()
     }

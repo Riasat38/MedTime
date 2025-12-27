@@ -65,7 +65,7 @@ fun AppNavigation() {
             )
         }
         composable("records") {
-            RecordsPlaceholder(navController = navController)
+            RecordListScreen(navController = navController)
         }
     }
 }

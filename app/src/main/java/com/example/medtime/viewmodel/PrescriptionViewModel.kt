@@ -23,10 +23,6 @@ import android.net.Uri
 import android.graphics.BitmapFactory
 private const val TAG = "PrescriptionViewModel"
 
-/**
- * ViewModel for PrescriptionScreen
- * Handles image analysis using Gemini AI and saving prescriptions
- */
 class PrescriptionViewModel : ViewModel() {
 
     private val geminiApiService = GeminiApiService()
@@ -47,6 +43,13 @@ class PrescriptionViewModel : ViewModel() {
 
     var saveState by mutableStateOf<SaveState>(SaveState.Idle)
         private set
+
+    var title by mutableStateOf("")
+        private set
+
+    fun updateTitle(userTitle: String) {
+        title = userTitle
+    }
 
     fun setSelectedImage(uri: Uri) {
         selectedImageUri = uri
@@ -116,10 +119,7 @@ class PrescriptionViewModel : ViewModel() {
             }
         }
     }
-    /**
-     * Loads a scaled-down bitmap from URI to avoid memory issues.
-     * Target max dimension: 2048px (good quality for API without excessive memory usage)
-     */
+
     private suspend fun loadScaledBitmap(context: Context, uri: Uri): Bitmap =
         withContext(Dispatchers.IO) {
             val contentResolver = context.contentResolver
@@ -203,6 +203,11 @@ class PrescriptionViewModel : ViewModel() {
             return
         }
 
+        if (title.isBlank()) {
+            saveState = SaveState.Error("Please enter a title to identify the prescription")
+            return
+        }
+
         saveState = SaveState.Saving
 
         viewModelScope.launch {
@@ -211,7 +216,9 @@ class PrescriptionViewModel : ViewModel() {
                     prescriptionRepository.savePrescription(
                         userId = user.uid,
                         medications = editableMedications,
-                        modelUsed = model
+                        modelUsed = model,
+                        preccriptionTitle = title,
+                        notificationType = notificationType
                     )
                 }
 
@@ -257,6 +264,7 @@ class PrescriptionViewModel : ViewModel() {
         editableMedications = emptyList()
         modelUsed = null
         saveState = SaveState.Idle
+        title = ""
     }
 
     fun resetSaveState() {

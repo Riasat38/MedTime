@@ -4,10 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.gson.Gson
 
-/**
- * SessionManager - Handles persistent user session storage
- * Uses SharedPreferences to store user data across app launches
- */
+
 class SessionManager(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences(
@@ -34,9 +31,7 @@ class SessionManager(context: Context) {
         }
     }
 
-    /**
-     * Save user session data
-     */
+
     fun saveUserSession(user: User) {
         val editor = prefs.edit()
         val userJson = gson.toJson(user)
@@ -45,9 +40,7 @@ class SessionManager(context: Context) {
         editor.apply()
     }
 
-    /**
-     * Get saved user session data
-     */
+
     fun getUserSession(): User? {
         if (!isLoggedIn()) return null
 
@@ -59,16 +52,10 @@ class SessionManager(context: Context) {
         }
     }
 
-    /**
-     * Check if user is logged in
-     */
     fun isLoggedIn(): Boolean {
         return prefs.getBoolean(KEY_IS_LOGGED_IN, false)
     }
 
-    /**
-     * Clear user session (logout)
-     */
     fun clearSession() {
         val editor = prefs.edit()
         editor.clear()

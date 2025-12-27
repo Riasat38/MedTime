@@ -11,7 +11,8 @@ data class ParsedMedication(
     val times: List<String> = emptyList(),
     @SerializedName("duration_days")
     val durationDays: Int? = null,
-    val instructions: String = ""
+    val instructions: String = "",
+    val title: String = ""
 )
 
 data class MedicationResponse(

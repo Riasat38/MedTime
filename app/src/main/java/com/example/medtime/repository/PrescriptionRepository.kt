@@ -2,6 +2,7 @@ package com.example.medtime.repository
 
 import android.util.Log
 import com.example.medtime.data.ParsedMedication
+import com.example.medtime.data.Prescription
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
@@ -12,8 +13,10 @@ private const val TAG = "PrescriptionRepository"
 data class SavedPrescription(
     val id: String = "",
     val userId: String = "",
+    val title: String = "",
     val medications: List<Map<String, Any?>> = emptyList(),
     val modelUsed: String = "",
+    val notificationType: String = "",
     val createdAt: Timestamp = Timestamp.now(),
     val status: String = "active"
 )
@@ -25,6 +28,8 @@ class PrescriptionRepository {
     suspend fun savePrescription(
         userId: String,
         medications: List<ParsedMedication>,
+        preccriptionTitle: String,
+        notificationType: String,
         modelUsed: String
     ): Result<String> {
         return try {
@@ -45,9 +50,11 @@ class PrescriptionRepository {
 
             val prescriptionData = hashMapOf(
                 "id" to prescriptionId,
+                "title" to preccriptionTitle,
                 "userId" to userId,
                 "medications" to medicationMaps,
                 "modelUsed" to modelUsed,
+                "notificationType" to notificationType,
                 "createdAt" to Timestamp.now(),
                 "status" to "active"
             )
@@ -75,8 +82,10 @@ class PrescriptionRepository {
                     SavedPrescription(
                         id = doc.getString("id") ?: "",
                         userId = doc.getString("userId") ?: "",
+                        title = doc.getString("title") ?: "Untitled Prescription",  // ✅ ADD THIS
                         medications = (doc.get("medications") as? List<Map<String, Any?>>) ?: emptyList(),
                         modelUsed = doc.getString("modelUsed") ?: "",
+                        notificationType = doc.getString("notificationType")?:"unspecified",
                         createdAt = doc.getTimestamp("createdAt") ?: Timestamp.now(),
                         status = doc.getString("status") ?: "active"
                     )
@@ -93,15 +102,18 @@ class PrescriptionRepository {
         }
     }
 
+
     suspend fun deletePrescription(prescriptionId: String): Result<Unit> {
         return try {
-            prescriptionsCollection.document(prescriptionId).delete().await()
-            Log.d(TAG, "Prescription deleted successfully: $prescriptionId")
+            firestore.collection("prescriptions")
+                .document(prescriptionId)
+                .delete()
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to delete prescription", e)
             Result.failure(e)
         }
     }
+
 }
 

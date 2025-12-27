@@ -15,10 +15,7 @@ object MedicationScheduler {
 
     private const val TAG = "MedicationScheduler"
 
-    /**
-     * Schedules push notifications for all medications based on times and duration
-     * Example: times=["09:00", "21:00"], duration="7" → 2 notifications per day for 7 days
-     */
+
     fun scheduleMedications(
         context: Context,
         medications: List<ParsedMedication>,
@@ -28,7 +25,7 @@ object MedicationScheduler {
         var totalScheduled = 0
 
         medications.forEachIndexed { medIndex, medication ->
-            // Parse duration (extract number from strings like "7 days", "14", etc.)
+            // Parse duration int -> string
             val durationDays = parseDuration(medication.durationDays.toString())
 
             if (durationDays <= 0) {
@@ -59,10 +56,6 @@ object MedicationScheduler {
         Log.d(TAG, "Total notifications scheduled: $totalScheduled")
     }
 
-    /**
-     * Parses duration string to get number of days
-     * Examples: "7", "7 days", "14 days", "1 week" → returns the number
-     */
     private fun parseDuration(duration: String): Int {
         return try {
             // Remove non-numeric characters and parse
@@ -74,9 +67,7 @@ object MedicationScheduler {
         }
     }
 
-    /**
-     * Schedules a single medication reminder for a specific day
-     */
+
     private fun scheduleMedicationReminder(
         context: Context,
         alarmManager: AlarmManager,
@@ -160,10 +151,6 @@ object MedicationScheduler {
         }
     }
 
-    /**
-     * Generates a unique request code for each medication + time + day combination
-     * This ensures each notification is independent and can be cancelled individually
-     */
     private fun generateRequestCode(
         prescriptionId: String,
         medicationIndex: Int,
@@ -175,9 +162,6 @@ object MedicationScheduler {
         return (hashCode + medicationIndex * 100000 + timeIndex * 10000 + dayOffset).absoluteValue % Int.MAX_VALUE
     }
 
-    /**
-     * Cancels all scheduled reminders for a prescription
-     */
     fun cancelMedicationReminders(
         context: Context,
         prescriptionId: String,
@@ -210,9 +194,6 @@ object MedicationScheduler {
         Log.d(TAG, "Cancelled $totalCancelled notifications for prescription: $prescriptionId")
     }
 
-    /**
-     * Gets the total number of notifications that will be scheduled
-     */
     fun getTotalNotificationCount(medications: List<ParsedMedication>): Int {
         var total = 0
         medications.forEach { medication ->
@@ -222,9 +203,7 @@ object MedicationScheduler {
         return total
     }
 
-    /**
-     * Checks if app can schedule exact alarms (Android 12+)
-     */
+
     fun canScheduleExactAlarms(context: Context): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -234,9 +213,7 @@ object MedicationScheduler {
         }
     }
 
-    /**
-     * Gets a list of all scheduled notification times for preview
-     */
+
     fun getScheduledTimesPreview(medications: List<ParsedMedication>): List<String> {
         val preview = mutableListOf<String>()
 

@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -132,6 +133,7 @@ fun MedicationCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+
             // Header with medication number
             Text(
                 text = "Medication ${index + 1}",

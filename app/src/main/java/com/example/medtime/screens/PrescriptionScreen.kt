@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Photo
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
@@ -34,6 +35,7 @@ import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.medtime.components.NotificationPreviewCard
+import com.example.medtime.ui.theme.Blue600
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,7 +52,7 @@ fun PrescriptionScreen(
 
     var selectedNotification by remember { mutableStateOf("") }
     var expandedNotification by remember { mutableStateOf(false) }
-    val notificationOptions = listOf("push", "alarm")
+    val notificationOptions = listOf("push", "alarm") //types of notification
     // Snackbar host state
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -62,8 +64,29 @@ fun PrescriptionScreen(
                 duration = SnackbarDuration.Short
             )
             // Reset the screen after showing snackbar
+            kotlinx.coroutines.delay(500)
             capturedImageUri = null
+            selectedNotification = ""
+            viewModel.resetAnalysis()
 
+        }
+    }
+    //Notification Permission Launcher
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Log.d("PrescriptionScreen", "Notification permission granted")
+        } else {
+            // Show a message to user
+            Toast.makeText(context, "Notification permission is required for reminders", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Request permission on first launch
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -258,6 +281,28 @@ fun PrescriptionScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
+                    OutlinedTextField(
+                        value = viewModel.title,
+                        onValueChange = { viewModel.updateTitle(it) },
+                        label = { Text("Prescription Title") },
+                        placeholder = { Text("Enter a title for the prescription") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Blue600,
+                            focusedLabelColor = Blue600,
+                            cursorColor = Blue600
+                        ),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Prescription title",
+                                tint = Blue600
+                            )
+                        }
+                    )
 
                     // Display each medication -> editable field
                     state.medications.forEachIndexed { index, medication ->
@@ -321,17 +366,23 @@ fun PrescriptionScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(8.dp))
-
+                            val canSave = selectedNotification.isNotEmpty() &&
+                                    viewModel.title.isNotBlank() &&
+                                    state.medications.isNotEmpty()
                             //validation
-                            if (selectedNotification.isEmpty()) {
+                            if (!canSave) {
                                 Text(
-                                    text = "Please select a reminder method before saving",
+                                    text = when {
+                                        selectedNotification.isEmpty() -> "Please select a reminder method"
+                                        viewModel.title.isBlank() -> "Please enter a prescription title"
+                                        else -> "Please add at least one medication"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.padding(vertical = 4.dp)
                                 )
-
                             }
+
                             if (selectedNotification.isNotEmpty()){
                                 // Show notification preview if notification type is selected
                                 NotificationPreviewCard(
@@ -344,45 +395,23 @@ fun PrescriptionScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
 
-
                             // Save button
                             GradientButton(
                                 text = "Save",
                                 onClick = { viewModel.savePrescription(context, selectedNotification) },
                                 modifier = Modifier.fillMaxWidth(),
+                                enabled = canSave,
                                 isOutlined = false,
                                 icon = Icons.Default.Save,
                                 height = 50.dp
                             )
-                            // Add this at the top with other launchers
-                            val notificationPermissionLauncher = rememberLauncherForActivityResult(
-                                contract = ActivityResultContracts.RequestPermission()
-                            ) { isGranted ->
-                                if (isGranted) {
-                                    Log.d("PrescriptionScreen", "Notification permission granted")
-                                } else {
-                                    // Show a message to user
-                                    Toast.makeText(context, "Notification permission is required for reminders", Toast.LENGTH_LONG).show()
-                                }
-                            }
 
-                            // Request permission on first launch
-                            LaunchedEffect(Unit) {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                                }
-                            }
                             Spacer(modifier = Modifier.height(16.dp))
-
-
 
                         }
                         is SaveState.Success -> {
 
-
-                            viewModel.resetAnalysis()
-
-                        }
+                      }
                         is SaveState.Saving -> {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
