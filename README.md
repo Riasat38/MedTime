@@ -470,7 +470,7 @@ SOFTWARE.
 
 - **GitHub Issues**: [Report a bug](https://github.com/Riasat38/MedTime/issues)
 - **Discussions**: [Ask questions](https://github.com/Riasat38/MedTime/discussions)
-- **Email**: [Contact developer](mailto:riasat38@example.com)
+- **Developer**: [@Riasat38](https://github.com/Riasat38)
 
 ---
 
